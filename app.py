@@ -37,14 +37,14 @@ def init_db():
             db.session.add(admin)
             db.session.commit()
 
-@app.before_request
-before_request_func():
-    pass
-
 @app.route('/', methods=['GET', 'POST'])
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    init_db()
+    try:
+        init_db()
+    except Exception as e:
+        print("Error al conectar DB:", e)
+        
     if request.method == 'POST':
         user = request.form.get('username')
         password = request.form.get('password')
@@ -83,4 +83,3 @@ def registrar_venta():
 
 if __name__ == '__main__':
     app.run(debug=True)
-    
