@@ -28,8 +28,8 @@ class Venta(db.Model):
     total = db.Column(db.Float, nullable=False)
     fecha = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
-@app.before_first_request
-def setup_db():
+# Corrección para Flask 3.x: Inicializar base de datos con context
+with app.app_context():
     db.create_all()
     if not Usuario.query.filter_by(username="admin").first():
         hashed_pw = generate_password_hash("admin123")
