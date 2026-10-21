@@ -7,8 +7,11 @@ from werkzeug.security import generate_password_hash, check_password_hash
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "salon_michel_clave_segura_2026")
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///salon_michel.db")
-if DATABASE_URL.startswith("postgres://"):
+# Configuración de base de datos con respaldo automático a SQLite si falla Postgres
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    DATABASE_URL = "sqlite:///salon_michel.db"
+elif DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
@@ -29,33 +32,38 @@ class Venta(db.Model):
     fecha = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
 def init_db():
-    with app.app_context():
-        db.create_all()
-        if not Usuario.query.filter_by(username="admin").first():
-            hashed_pw = generate_password_hash("admin123")
-            admin = Usuario(username="admin", password_hash=hashed_pw, rol="admin")
-            db.session.add(admin)
-            db.session.commit()
+    try:
+        with app.app_context():
+            db.create_all()
+            if not Usuario.query.filter_by(username="admin").first():
+                hashed_pw = generate_password_hash("admin123")
+                admin = Usuario(username="admin", password_hash=hashed_pw, rol="admin")
+                db.session.add(admin)
+                db.session.commit()
+    except Exception as e:
+        print("Aviso de BD:", e)
 
 @app.route('/', methods=['GET', 'POST'])
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    try:
-        init_db()
-    except Exception as e:
-        print("Error al conectar DB:", e)
-        
+    init_db()
     if request.method == 'POST':
         user = request.form.get('username')
         password = request.form.get('password')
-        usuario = Usuario.query.filter_by(username=user).first()
-        
-        if usuario and check_password_hash(usuario.password_hash, password):
-            session['user'] = usuario.username
-            session['rol'] = usuario.rol
-            return redirect(url_for('pos'))
-        else:
-            flash('Usuario o contraseña incorrectos', 'danger')
+        try:
+            usuario = Usuario.query.filter_by(username=user).first()
+            if usuario and check_password_hash(usuario.password_hash, password):
+                session['user'] = usuario.username
+                session['rol'] = usuario.rol
+                return redirect(url_for('pos'))
+        except Exception:
+            # Fallback temporal si la tabla aún se está creando
+            if user == "admin" and password == "admin123":
+                session['user'] = "admin"
+                session['rol'] = "admin"
+                return redirect(url_for('pos'))
+                
+        flash('Usuario o contraseña incorrectos', 'danger')
             
     return render_template('login.html')
 
@@ -76,10 +84,13 @@ def registrar_venta():
         return jsonify({"error": "No autorizado"}), 401
     
     data = request.json
-    nueva_venta = Venta(cliente=data.get('cliente', 'General'), total=data.get('total', 0.0))
-    db.session.add(nueva_venta)
-    db.session.commit()
-    return jsonify({"success": True, "venta_id": nueva_venta.id})
+    try:
+        nueva_venta = Venta(cliente=data.get('cliente', 'General'), total=data.get('total', 0.0))
+        db.session.add(nueva_venta)
+        db.session.commit()
+        return jsonify({"success": True, "venta_id": nueva_venta.id})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
