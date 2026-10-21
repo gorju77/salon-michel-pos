@@ -5,7 +5,7 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "super_secreto_salon_michel_2026")
+app.secret_key = os.environ.get("SECRET_KEY", "salon_michel_clave_segura_2026")
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///salon_michel.db")
 if DATABASE_URL.startswith("postgres://"):
@@ -28,18 +28,23 @@ class Venta(db.Model):
     total = db.Column(db.Float, nullable=False)
     fecha = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
-# Corrección para Flask 3.x: Inicializar base de datos con context
-with app.app_context():
-    db.create_all()
-    if not Usuario.query.filter_by(username="admin").first():
-        hashed_pw = generate_password_hash("admin123")
-        admin = Usuario(username="admin", password_hash=hashed_pw, rol="admin")
-        db.session.add(admin)
-        db.session.commit()
+def init_db():
+    with app.app_context():
+        db.create_all()
+        if not Usuario.query.filter_by(username="admin").first():
+            hashed_pw = generate_password_hash("admin123")
+            admin = Usuario(username="admin", password_hash=hashed_pw, rol="admin")
+            db.session.add(admin)
+            db.session.commit()
+
+@app.before_request
+before_request_func():
+    pass
 
 @app.route('/', methods=['GET', 'POST'])
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    init_db()
     if request.method == 'POST':
         user = request.form.get('username')
         password = request.form.get('password')
@@ -78,3 +83,4 @@ def registrar_venta():
 
 if __name__ == '__main__':
     app.run(debug=True)
+    
